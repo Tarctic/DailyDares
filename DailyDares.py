@@ -21,7 +21,7 @@ To do:
       3 -> 0
       default priority -> 3
       final order: id, kind, dare, default_p, current_p)
-    - option to set default priority
+    --- option to set default priority
     - show current dare and mark as done when done (create and use a log file that
     keeps track of all dares, time at which they're marked as done, reset etc.)
     - reset based on days/weeks
@@ -149,7 +149,7 @@ def change(dorc):
     id_ = tk.StringVar()
     priority = tk.StringVar()
     
-    lle(screen1, "Enter dare No.:",id_)
+    lle(screen1, "Enter dare ID:",id_)
     lle(screen1, f"Enter new {dorc} priority:",priority)
     lb(screen1, "Save", lambda: change_p(screen1, id_.get(), priority.get(), dorc))
     
@@ -184,10 +184,11 @@ def add():
     tk.Radiobutton(screen1, text="Islamic", variable=kind, value='1').pack()
     lle(screen1, "Default Priority:", default)
     lle(screen1,"Current Priority:",priority)
-    lb(screen1, "Save", lambda: save(screen1, kind.get().strip(), name.get().strip(), default.get().strip(), priority.get().strip()))
+    lb(screen1, "Save", lambda: save(screen1=screen1, k=kind.get().strip(), n=name.get().strip(), dp=default.get().strip() ))
     
-def save(screen1, k,n,dp,cp):
-    text = add_dare(k=k,n=n,dp=dp,cp=cp)
+def save(screen1, k,n,dp):
+    cp = dp
+    text = add_dare(k=k,n=n,dp=dp, cp=cp)
     ll(screen1, text)
     
 def remove():
@@ -196,7 +197,7 @@ def remove():
     display(screen1)
     id_ = tk.StringVar()
     
-    lle(screen1,"Enter dare No.:",id_)
+    lle(screen1,"Enter dare ID:",id_)
     lb(screen1, "Remove", lambda: delete(screen1, id_.get()))
     
 def delete(screen1, id_):
@@ -204,7 +205,7 @@ def delete(screen1, id_):
             
     text="Removed!"
     if c==0:
-        text = f"Dare no. '{id_}' not found!"
+        text = f"Dare ID '{id_}' not found!"
     
     ll(screen1, text)
     
@@ -238,18 +239,18 @@ def display(screen1):
     dares_table(screen1,"Random",'0')
     dares_table(screen1,"Islamic",'1')
     
-def dares_table(screen1, kind, num):
+def dares_table(screen1, kind, ri):
     dares = get_dares()
     ll(screen1,f"{kind.upper()}:", fg="black")
     if len(dares):
-        tk.Label(screen1, text="No.\tDare\t\t\t\t\tPriority", bg="pink").pack(fill='both', padx=10)
+        tk.Label(screen1, text="ID\tDare\t\t\t\tDefault\tCurrent", bg="pink").pack(fill='both', padx=10)
         for i in dares:
-            if i[1]==num:
+            if i[1]==ri:
                 space=0
                 if ' ' in i[2]:
                     space = 1
-                tab = "\t"*(5-((len(i[2])-space)//8))
-                tk.Label(screen1, text=i[0]+'\t'+i[2]+tab+'     '+i[4], bg="DarkSlateGray3", anchor='w').pack(fill='both', padx=(35,0))
+                tab = "\t"*(4-((len(i[2])-space)//8))
+                tk.Label(screen1, text=i[0]+'\t'+i[2]+tab+'     '+i[3]+'\t    '+i[4], bg="DarkSlateGray3", anchor='w').pack(fill='both', padx=(35,0))
     else:
         ll(screen1,"No dares available!")
 
@@ -289,7 +290,7 @@ def add_dare(id_=0,k='0',n='',dp=0,cp=0):
     return text
 
 def remove_dare(id_,p=0):
-    dare = f"Dare No. '{id_}' not found!"
+    dare = f"Dare ID '{id_}' not found!"
     if not str(id_).isdigit():
         return 0,dare
     if not str(p).isdigit():
