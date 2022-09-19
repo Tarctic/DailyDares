@@ -14,20 +14,32 @@ import random
 
 '''
 To do:
+    --- fix order of columns in csv file
+    ( 0 -> 1
+      1 -> 2
+      2 -> 4
+      3 -> 0
+      default priority -> 3
+      final order: id, kind, dare, default_p, current_p)
+    - option to set default priority
+    - show current dare and mark as done when done (create and use a log file that
+    keeps track of all dares, time at which they're marked as done, reset etc.)
+    - reset based on days/weeks
+    - streak/total done dares
+    - calendar for marking days on which dares were done vs not done
+
+    - back button; change window instead of new windows
     - Fonts, button colors, background images
     - convert final to exe (auto-py-to-exe)
-    --- serial number for easy deletion/changing
-    - back button; change window instead of new windows
     --- buttons instead of typing for random and islamic options
     --- priorities 1,3,5 and -2 every usage
     --- condense code
     --- decrease priority
+    --- serial number for easy deletion/changing
 '''
 
 root=tk.Tk()
 def main_root():
-
-    
     root.geometry("600x600")
     root.title('Daily Dares')
     root.iconbitmap(r'Files/icon.ico')
@@ -69,18 +81,18 @@ def choose(ri, screen1):
     prior_dares = []
     c = 0
     for d in dares:
-        if d[0]==ri:
+        if d[1]==ri:
             c+=1
-            prior_dares.extend([(d[3])]*int(d[2]))
+            prior_dares.extend([(d[0])]*int(d[4]))
     
     if c>0 and len(prior_dares) > 0:
             num = random.choice(prior_dares)
             dare = remove_dare(num)[1]
-            name = dare[1]
-            dare[2] = int(dare[2]) - 2
-            if dare[2]<0:
-                dare[2] = 0
-            add_dare(*dare[:3])
+            name = dare[2]
+            dare[4] = int(dare[4]) - 2
+            if dare[4]<0:
+                dare[4] = 0
+            add_dare(*dare)
             
             ll(screen1, "YOUR DARE:", height=4, fg="black")
             ll(screen1, name.upper(), fontsize=20)
@@ -90,10 +102,10 @@ def choose(ri, screen1):
         
 def check_reset(dares, ri):
     sum_ri,total_p = 0,0
-    for i in dares:
-        if i[0]==ri: # NUM -> 0 = RANDOM, 1 = ISLAMIC
+    for dare in dares:
+        if dare[1]==ri: # NUM -> 0 = RANDOM, 1 = ISLAMIC
             sum_ri += 1 # TOTAL NUMBER OF ALL ISLAMIC OR RANDOM DARES
-            total_p += int(i[2]) # TOTAL PRIORITY OF ALL ISLAMIC OR RANDOM DARES
+            total_p += int(dare[4]) # TOTAL PRIORITY OF ALL ISLAMIC OR RANDOM DARES
           
     max_p = 5
     max_total_p = sum_ri * max_p
@@ -103,11 +115,11 @@ def check_reset(dares, ri):
         
 def reset_p(ri, dares, msg=0, screen1=None):
     for d in dares:
-        if d[0]==ri:
-            name = d[1]
-            num = d[3]
-            remove_dare(num)
-            add_dare(ri,name,5,num)
+        if d[1]==ri:
+            name = d[2]
+            id_ = d[0]
+            remove_dare(id_)
+            add_dare(id_,ri,name,0,5)
     
     if msg:
         ll(screen1, "Saved!")
@@ -134,12 +146,12 @@ def change():
     final = screen_height(3)
     screen1 = screen("Change priority", final)
     display(screen1)
-    num = tk.StringVar()
+    id_ = tk.StringVar()
     priority = tk.StringVar()
     
-    lle(screen1,"Enter dare No.:",num)
+    lle(screen1,"Enter dare No.:",id_)
     lle(screen1,"Enter new priority:",priority)
-    lb(screen1, "Save", lambda: change_p(screen1, num.get(), priority.get()))
+    lb(screen1, "Save", lambda: change_p(screen1, id_.get(), priority.get()))
     
 def change_p(screen1, num, p):
     c, dare = remove_dare(num,p)
@@ -148,7 +160,7 @@ def change_p(screen1, num, p):
     if c==0:
         text = dare
     else:
-        dare[2] = p
+        dare[4] = p
         text = add_dare(*dare)
     ll(screen1, text)
 
@@ -168,24 +180,24 @@ def add():
     lb(screen1, "Save", lambda: save(screen1, kind.get().strip(), name.get().strip(), priority.get().strip()))
     
 def save(screen1, k,n,p):
-    text = add_dare(k,n,p)
+    text = add_dare(k=k,n=n,cp=p)
     ll(screen1, text)
     
 def remove():
     final = screen_height(7)
     screen1 = screen("Remove Dare", final)
     display(screen1)
-    num = tk.StringVar()
+    id_ = tk.StringVar()
     
-    lle(screen1,"Enter dare No.:",num)
-    lb(screen1, "Remove", lambda: delete(screen1, num.get()))
+    lle(screen1,"Enter dare No.:",id_)
+    lb(screen1, "Remove", lambda: delete(screen1, id_.get()))
     
-def delete(screen1, num):
-    c = remove_dare(num)[0]
+def delete(screen1, id_):
+    c = remove_dare(id_)[0]
             
     text="Removed!"
     if c==0:
-        text = f"Dare no. '{num}' not found!"
+        text = f"Dare no. '{id_}' not found!"
     
     ll(screen1, text)
     
@@ -222,73 +234,68 @@ def display(screen1):
 def dares_table(screen1, kind, num):
     dares = get_dares()
     ll(screen1,f"{kind.upper()}:", fg="black")
-    tk.Label(screen1, text="No.\tDare\t\t\t\t\tPriority", bg="pink").pack(fill='both', padx=10)
-    for i in dares:
-            if i[0]==num:
+    if len(dares):
+        tk.Label(screen1, text="No.\tDare\t\t\t\t\tPriority", bg="pink").pack(fill='both', padx=10)
+        for i in dares:
+            if i[1]==num:
                 space=0
-                if ' ' in i[1]:
+                if ' ' in i[2]:
                     space = 1
-                tab = "\t"*(5-((len(i[1])-space)//8))
-                tk.Label(screen1, text=i[3]+'\t'+i[1]+tab+'     '+i[2], bg="DarkSlateGray3", anchor='w').pack(fill='both', padx=(35,0))
-
+                tab = "\t"*(5-((len(i[2])-space)//8))
+                tk.Label(screen1, text=i[0]+'\t'+i[2]+tab+'     '+i[4], bg="DarkSlateGray3", anchor='w').pack(fill='both', padx=(35,0))
+    else:
+        ll(screen1,"No dares available!")
 
 def get_dares():
-    fh=open('Files/Dares.csv','r')
-    dares=list(csv.reader(fh))
+    fh = open('Files/darestry.csv','r')
+    read = csv.reader(fh)
+    dares = list(read)
     fh.close()
     
     return dares
 
-def add_dare(k,n,p,num=0):
-    fh = open('Files/Dares.csv','a', newline='')
+def add_dare(id_=0,k='0',n='',dp=0,cp=0):
+    fh = open('Files/darestry.csv','a', newline='')
     add_dare = csv.writer(fh)
     
     text = "Saved!"
     status = 1
-    
-    if k not in ['0','1']:
-        if k.lower() == 'random':
-            k=0
-        elif k.lower() == 'islamic':
-            k=1
-        else:
-            text=f"'{k}' is not a valid entry for dare type"
-            status = 0
         
-    if str(p).isdigit() != True:
-        text = f"'{p}' is not a valid priority"
+    if str(cp).isdigit() != True:
+        text = f"'{cp}' is not a valid priority"
         status = 0
         
     if status:
-        num=int(num)
-        if num==0:
+        id_=int(id_)
+        if id_==0:
             dares = get_dares()
             maxi=0
-            for i in dares:
-                if int(i[3])>maxi:
-                    maxi=int(i[3])
-            num=maxi+1
-        add_dare.writerow([k,n,p,num])
+            if len(dares):
+                for i in dares:
+                    if int(i[0])>maxi:
+                        maxi=int(i[0])
+            id_=maxi+1
+        add_dare.writerow([id_,k,n,0,cp])
         
     print(text)
     fh.close()
     return text
 
-def remove_dare(num,p=0):
-    dare = f"Dare No. '{num}' not found!"
-    if not str(num).isdigit():
+def remove_dare(id_,p=0):
+    dare = f"Dare No. '{id_}' not found!"
+    if not str(id_).isdigit():
         return 0,dare
     if not str(p).isdigit():
         return 0,f"'{p}' is not a valid priority!"
     
     dares = get_dares()
     
-    fh = open('Files/Dares.csv','w', newline='')
+    fh = open('Files/darestry.csv','w', newline='')
     add_dares = csv.writer(fh)
     
     c=0
     for i in dares:
-        if int(i[3])!=int(num):
+        if int(i[0])!=int(id_):
             add_dares.writerow(i)
         else:
             c=c+1
