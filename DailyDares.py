@@ -101,25 +101,24 @@ def choose(ri, screen1):
         ll(screen1, "No dares available!", height=4, fg="black")
         
 def check_reset(dares, ri):
-    sum_ri,total_p = 0,0
+    sum_ri = total_current = total_default = 0
     for dare in dares:
         if dare[1]==ri: # NUM -> 0 = RANDOM, 1 = ISLAMIC
-            sum_ri += 1 # TOTAL NUMBER OF ALL ISLAMIC OR RANDOM DARES
-            total_p += int(dare[4]) # TOTAL PRIORITY OF ALL ISLAMIC OR RANDOM DARES
-          
-    max_p = 5
-    max_total_p = sum_ri * max_p
+            sum_ri += 1 # TOTAL NUMBER OF ALL ISLAMIC/RANDOM DARES
+            total_current += int(dare[4]) # TOTAL CURRENT PRIORITY OF ALL ISLAMIC/RANDOM DARES
+            total_default += int(dare[3]) # TOTAL DEFAULT PRIORITY OF ALL ISLAMIC/RANDOM DARES
+            
     max_minus = 14 # AFTER 7 PRIORITY POINTS OF RANDOM OR ISLAMIC ARE REDUCED, RESET THOSE BACK TO 5
-    if total_p <= (max_total_p - max_minus):
+    if total_current <= (total_default - max_minus):
         reset_p(ri, dares)
         
 def reset_p(ri, dares, msg=0, screen1=None):
-    for d in dares:
-        if d[1]==ri:
-            name = d[2]
-            id_ = d[0]
+    for dare in dares:
+        if dare[1]==ri:
+            id_ = dare[0]
             remove_dare(id_)
-            add_dare(id_,ri,name,0,5)
+            dare[4] = dare[3] # Resetting current priority to default priority
+            add_dare(*dare)
     
     if msg:
         ll(screen1, "Saved!")
@@ -129,10 +128,11 @@ def options():
 #    root.withdraw()
     
     lb(screen1, "View Dares", view, 3)
-    lb(screen1, "Change priority", change)
+    lb(screen1, "Change Current Priority", lambda: change("current"))
+    lb(screen1, "Change Default Priority", lambda: change("default"))
     lb(screen1, "Add Dare", add)
     lb(screen1, "Remove Dare", remove)
-    lb(screen1, "Reset priorities", reset)
+    lb(screen1, "Reset Priorities", reset)
 #    lb(screen1, "BACK", lambda: [root.deiconify(), screen1.destroy()])
     
     return screen1
@@ -142,25 +142,30 @@ def view():
     screen1 = screen("View Dares", final)
     display(screen1)
     
-def change():
+def change(dorc):
     final = screen_height(3)
-    screen1 = screen("Change priority", final)
+    screen1 = screen(f"Change {dorc} priority", final)
     display(screen1)
     id_ = tk.StringVar()
     priority = tk.StringVar()
     
-    lle(screen1,"Enter dare No.:",id_)
-    lle(screen1,"Enter new priority:",priority)
-    lb(screen1, "Save", lambda: change_p(screen1, id_.get(), priority.get()))
+    lle(screen1, "Enter dare No.:",id_)
+    lle(screen1, f"Enter new {dorc} priority:",priority)
+    lb(screen1, "Save", lambda: change_p(screen1, id_.get(), priority.get(), dorc))
     
-def change_p(screen1, num, p):
+def change_p(screen1, num, p, dorc):
     c, dare = remove_dare(num,p)
     
+    if dorc == "default":
+        dorcnum = 3
+    elif dorc == "current":
+        dorcnum = 4
+        
     text = "Saved!"
     if c==0:
         text = dare
     else:
-        dare[4] = p
+        dare[dorcnum] = p
         text = add_dare(*dare)
     ll(screen1, text)
 
@@ -170,17 +175,19 @@ def add():
     name = tk.StringVar()
     kind = tk.StringVar()
     kind.set(value='0') #temporary
+    default = tk.StringVar()
     priority = tk.StringVar()
     
     lle(screen1,"Dare:",name)
     ll(screen1,"Dare Type:",fg="white")
     tk.Radiobutton(screen1, text="Random", variable=kind, value='0').pack(pady=(5,10))
     tk.Radiobutton(screen1, text="Islamic", variable=kind, value='1').pack()
-    lle(screen1,"Priority:",priority)
-    lb(screen1, "Save", lambda: save(screen1, kind.get().strip(), name.get().strip(), priority.get().strip()))
+    lle(screen1, "Default Priority:", default)
+    lle(screen1,"Current Priority:",priority)
+    lb(screen1, "Save", lambda: save(screen1, kind.get().strip(), name.get().strip(), default.get().strip(), priority.get().strip()))
     
-def save(screen1, k,n,p):
-    text = add_dare(k=k,n=n,cp=p)
+def save(screen1, k,n,dp,cp):
+    text = add_dare(k=k,n=n,dp=dp,cp=cp)
     ll(screen1, text)
     
 def remove():
@@ -275,7 +282,7 @@ def add_dare(id_=0,k='0',n='',dp=0,cp=0):
                     if int(i[0])>maxi:
                         maxi=int(i[0])
             id_=maxi+1
-        add_dare.writerow([id_,k,n,0,cp])
+        add_dare.writerow([id_,k,n,dp,cp])
         
     print(text)
     fh.close()
