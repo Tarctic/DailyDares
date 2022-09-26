@@ -1,6 +1,9 @@
 import tkinter as tk
 import csv
 import random
+import pickle
+from datetime import timedelta as td
+from datetime import datetime as dt
 
 # run once for crispy clarity
 # =============================================================================
@@ -24,6 +27,16 @@ To do:
     --- option to set default priority
     - show current dare and mark as done when done (create and use a log file that
     keeps track of all dares, time at which they're marked as done, reset etc.)
+    Uses of log file:
+        - to know at what date the values were last reset, so that they can be reset again in specified days
+        - to know how many total dares we've done, streak
+        - to keep a record of all the dares we've done in the past, including deleted ones
+    Columns of log file:
+        - command (add/remove/c_default/c_current/selected/completed/reset)
+        - ID [-reset]
+        - Dare name [-reset]
+        - timestamp
+
     - reset based on days/weeks
     - streak/total done dares
     - calendar for marking days on which dares were done vs not done
@@ -87,12 +100,12 @@ def choose(ri, screen1):
     
     if c>0 and len(prior_dares) > 0:
             num = random.choice(prior_dares)
-            dare = remove_dare(num)[1]
+            dare = remove_dare(id_=num,comm='selected')[1]
             name = dare[2]
             dare[4] = int(dare[4]) - 2
             if dare[4]<0:
                 dare[4] = 0
-            add_dare(*dare)
+            add_dare(*dare,comm="selected")
             
             ll(screen1, "YOUR DARE:", height=4, fg="black")
             ll(screen1, name.upper(), fontsize=20)
@@ -101,24 +114,28 @@ def choose(ri, screen1):
         ll(screen1, "No dares available!", height=4, fg="black")
         
 def check_reset(dares, ri):
-    sum_ri = total_current = total_default = 0
-    for dare in dares:
-        if dare[1]==ri: # NUM -> 0 = RANDOM, 1 = ISLAMIC
-            sum_ri += 1 # TOTAL NUMBER OF ALL ISLAMIC/RANDOM DARES
-            total_current += int(dare[4]) # TOTAL CURRENT PRIORITY OF ALL ISLAMIC/RANDOM DARES
-            total_default += int(dare[3]) # TOTAL DEFAULT PRIORITY OF ALL ISLAMIC/RANDOM DARES
-            
-    max_minus = 14 # AFTER 7 PRIORITY POINTS OF RANDOM OR ISLAMIC ARE REDUCED, RESET THOSE BACK TO 5
-    if total_current <= (total_default - max_minus):
-        reset_p(ri, dares)
+    
+    f=open('files/log2.dat','rb')
+    try:
+        while True:
+            rec = pickle.load(f)
+            if rec[0] == 'reset':
+                last = rec
+    except EOFError:
+        f.close()
+        
+    last_reset = dt.strptime(last[1],"%Y-%m-%d %H:%M:%S.%f") # time of last reset
+    now = dt.now() # time now
+    if now > last_reset + td(weeks=1): # if a week has passed since last reset
+        reset_p(ri=ri, dares=dares)
         
 def reset_p(ri, dares, msg=0, screen1=None):
     for dare in dares:
         if dare[1]==ri:
             id_ = dare[0]
-            remove_dare(id_)
+            remove_dare(id_=id_,comm='reset')
             dare[4] = dare[3] # Resetting current priority to default priority
-            add_dare(*dare)
+            add_dare(*dare,comm="reset")
     
     if msg:
         ll(screen1, "Saved!")
@@ -154,19 +171,21 @@ def change(dorc):
     lb(screen1, "Save", lambda: change_p(screen1, id_.get(), priority.get(), dorc))
     
 def change_p(screen1, num, p, dorc):
-    c, dare = remove_dare(num,p)
     
     if dorc == "default":
         dorcnum = 3
     elif dorc == "current":
         dorcnum = 4
-        
+    
+    comm="c_"+dorc
+    c, dare = remove_dare(id_=num,p=p,comm=comm)
+    
     text = "Saved!"
     if c==0:
         text = dare
     else:
         dare[dorcnum] = p
-        text = add_dare(*dare)
+        text = add_dare(*dare,comm=comm)
     ll(screen1, text)
 
 def add():
@@ -176,19 +195,17 @@ def add():
     kind = tk.StringVar()
     kind.set(value='0') #temporary
     default = tk.StringVar()
-    priority = tk.StringVar()
     
     lle(screen1,"Dare:",name)
     ll(screen1,"Dare Type:",fg="white")
     tk.Radiobutton(screen1, text="Random", variable=kind, value='0').pack(pady=(5,10))
     tk.Radiobutton(screen1, text="Islamic", variable=kind, value='1').pack()
     lle(screen1, "Default Priority:", default)
-    lle(screen1,"Current Priority:",priority)
     lb(screen1, "Save", lambda: save(screen1=screen1, k=kind.get().strip(), n=name.get().strip(), dp=default.get().strip() ))
     
 def save(screen1, k,n,dp):
     cp = dp
-    text = add_dare(k=k,n=n,dp=dp, cp=cp)
+    text = add_dare(k=k,n=n,dp=dp,cp=cp,comm='add')
     ll(screen1, text)
     
 def remove():
@@ -201,7 +218,7 @@ def remove():
     lb(screen1, "Remove", lambda: delete(screen1, id_.get()))
     
 def delete(screen1, id_):
-    c = remove_dare(id_)[0]
+    c = remove_dare(id_,comm='remove')[0]
             
     text="Removed!"
     if c==0:
@@ -211,8 +228,9 @@ def delete(screen1, id_):
     
 def reset():
     screen1 = screen("Reset priorities")
-    lb(screen1, "Random", lambda: reset_p('0', get_dares(), 1, screen1), lheight=4)
-    lb(screen1, "Islamic", lambda: reset_p('1', get_dares(), 1, screen1))
+    lb(screen1, "Random", lambda: reset_p(ri='0', dares=get_dares(), msg=1, screen1=screen1), lheight=4)
+    lb(screen1, "Islamic", lambda: reset_p(ri='1', dares=get_dares(), msg=1, screen1=screen1))
+    
     
 def screen(title, final=380):
     screen1=tk.Toplevel(root)
@@ -262,9 +280,9 @@ def get_dares():
     
     return dares
 
-def add_dare(id_=0,k='0',n='',dp=0,cp=0):
+def add_dare(id_=0,k='0',n='',dp=0,cp=0,comm=''):
     fh = open('Files/darestry.csv','a', newline='')
-    add_dare = csv.writer(fh)
+    adder = csv.writer(fh)
     
     text = "Saved!"
     status = 1
@@ -283,13 +301,16 @@ def add_dare(id_=0,k='0',n='',dp=0,cp=0):
                     if int(i[0])>maxi:
                         maxi=int(i[0])
             id_=maxi+1
-        add_dare.writerow([id_,k,n,dp,cp])
+        adder.writerow([id_,k,n,dp,cp])
         
     print(text)
     fh.close()
+    
+    add_log(comm=comm, id_=id_, n=n)
+    
     return text
 
-def remove_dare(id_,p=0):
+def remove_dare(id_,p=0,comm=''):
     dare = f"Dare ID '{id_}' not found!"
     if not str(id_).isdigit():
         return 0,dare
@@ -310,6 +331,8 @@ def remove_dare(id_,p=0):
             dare = i
     fh.close()
     
+    add_log(comm=comm, id_=id_, n=dare[2])
+    
     return c,dare
 
 def screen_height(limit):
@@ -321,5 +344,12 @@ def screen_height(limit):
         final = 380 + extra
     
     return final
+
+def add_log(comm, id_, n):
+    f = open('files/log2.dat','ab')
+    timestamp = str(dt.now())
+    log = [comm,timestamp,id_,n]
+    pickle.dump(log,f)
+    f.close()
 
 main_root()
