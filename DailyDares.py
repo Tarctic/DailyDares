@@ -6,62 +6,6 @@ from datetime import timedelta as td
 from datetime import datetime as dt
 from datetime import time, date
 
-# run once for crispy clarity
-# =============================================================================
-# import ctypes
-# import sys
-# 
-# if __name__ == "__main__":   
-#     if 'win' in sys.platform:
-#         ctypes.windll.shcore.SetProcessDpiAwareness(1)
-# =============================================================================
-
-'''
-To do:
-    --- streak
-    - calendar for marking days on which dares were done vs not done
-
-    - radio buttons for deletion and changing (using for loop)
-    - back button; change window instead of new windows
-    - Fonts, button colors, background images
-    - convert final to exe (auto-py-to-exe)
-    
-    --- buttons instead of typing for random and islamic options
-    --- priorities 1,3,5 and -2 every usage
-    --- condense code
-    --- decrease priority
-    --- serial number for easy deletion/changing
-    --- fix order of columns in csv file
-    ( 0 -> 1
-      1 -> 2
-      2 -> 4
-      3 -> 0
-      default priority -> 3
-      final order: id, kind, dare, default_p, current_p)
-    --- option to set default priority
-    --- create and use a log file that keeps track of all dares, time at which they're marked as done, reset etc.
-    Uses of log file:
-        - to know at what date the values were last reset, so that they can be reset again in specified days
-        - to know how many total dares we've done, streak
-        - to keep a record of all the dares we've done in the past, including deleted ones
-    Columns of log file:
-        - command (add/remove/c_default/c_current/selected/completed/reset)
-        - ID [-reset]
-        - Dare name [-reset]
-        - timestamp
-    --- reset based on days/weeks
-    --- separate reset for islamic and random 
-    (check_reset only checks last reset, does not check kind) 
-    (if islamic is reset on this sunday, random should not be reset along with islamic on next sunday)
-    Alternatively, keep weekly reset separate from forced reset. 
-    So the log will be checked only for natural resets every week.
-    --- add a reset record to empty log files so that check_reset works properly
-    --- show current dare and mark as done when done
-    --- show time left to complete    
-    --- NEW DARE SHOULD NOT BE POSSIBLE TO SELECT WHEN ONE IS CURRENTLY ONGOING (NOT DONE)
-    --- total done
-'''
-
 root=tk.Tk()
 def main_root():
     root.geometry("600x600")
@@ -184,18 +128,6 @@ def reset_p(ri, dares, msg=0, screen1=None):
     if msg:
         ll(screen1, "Saved!")
     
-''' 
-if random button does both view current dare and select new dare: 
-a new dare cannot be chosen until the old one is completed
-random button will have to check if a dare has already been selected
-and only if not should it show a new dare
-this too can go two ways: 1) new dare ONLY on completion 2) refresh on a new day
-
-if another button for viewing current dare, possibly allowing more than one dare at a time
-in which case, we have to enter which dare we have completed or use radiobuttons
-if only one dare at a time: random button should be disabled or show a go back message
-'''
-    
 def time_left(dare):
     left = str(dt.combine((dt.today() + td(days=1)),time(00,00)) - dt.now())
     print(left)
@@ -247,7 +179,6 @@ def mark_done(screen1, rec):
         
 def options():
     screen1 = screen("Options")
-#    root.withdraw()
     
     lb(screen1, "View Dares", view, 3)
     lb(screen1, "Change Current Priority", lambda: change("current"))
@@ -255,8 +186,6 @@ def options():
     lb(screen1, "Add Dare", add)
     lb(screen1, "Remove Dare", remove)
     lb(screen1, "Reset Priorities", reset)
-#    lb(screen1, "BACK", lambda: [root.deiconify(), screen1.destroy()])
-    # maybe use a single window and clear all widgets instead of destroying/hiding windows
     
     return screen1
 
