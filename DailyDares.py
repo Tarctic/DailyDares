@@ -4,6 +4,7 @@ import random
 import pickle
 from datetime import timedelta as td
 from datetime import datetime as dt
+from datetime import time, date
 
 # run once for crispy clarity
 # =============================================================================
@@ -17,6 +18,19 @@ from datetime import datetime as dt
 
 '''
 To do:
+    --- streak
+    - calendar for marking days on which dares were done vs not done
+
+    - radio buttons for deletion and changing (using for loop)
+    - back button; change window instead of new windows
+    - Fonts, button colors, background images
+    - convert final to exe (auto-py-to-exe)
+    
+    --- buttons instead of typing for random and islamic options
+    --- priorities 1,3,5 and -2 every usage
+    --- condense code
+    --- decrease priority
+    --- serial number for easy deletion/changing
     --- fix order of columns in csv file
     ( 0 -> 1
       1 -> 2
@@ -25,8 +39,7 @@ To do:
       default priority -> 3
       final order: id, kind, dare, default_p, current_p)
     --- option to set default priority
-    - show current dare and mark as done when done (create and use a log file that
-    keeps track of all dares, time at which they're marked as done, reset etc.)
+    --- create and use a log file that keeps track of all dares, time at which they're marked as done, reset etc.
     Uses of log file:
         - to know at what date the values were last reset, so that they can be reset again in specified days
         - to know how many total dares we've done, streak
@@ -36,19 +49,17 @@ To do:
         - ID [-reset]
         - Dare name [-reset]
         - timestamp
-
-    - reset based on days/weeks
-    - streak/total done dares
-    - calendar for marking days on which dares were done vs not done
-
-    - back button; change window instead of new windows
-    - Fonts, button colors, background images
-    - convert final to exe (auto-py-to-exe)
-    --- buttons instead of typing for random and islamic options
-    --- priorities 1,3,5 and -2 every usage
-    --- condense code
-    --- decrease priority
-    --- serial number for easy deletion/changing
+    --- reset based on days/weeks
+    --- separate reset for islamic and random 
+    (check_reset only checks last reset, does not check kind) 
+    (if islamic is reset on this sunday, random should not be reset along with islamic on next sunday)
+    Alternatively, keep weekly reset separate from forced reset. 
+    So the log will be checked only for natural resets every week.
+    --- add a reset record to empty log files so that check_reset works properly
+    --- show current dare and mark as done when done
+    --- show time left to complete    
+    --- NEW DARE SHOULD NOT BE POSSIBLE TO SELECT WHEN ONE IS CURRENTLY ONGOING (NOT DONE)
+    --- total done
 '''
 
 root=tk.Tk()
@@ -70,12 +81,14 @@ def main_root():
     # Create Buttons
     button1 = tk.Button(root, text = "RANDOM", command=random_dare, bg="gray20", fg="white", padx=6, pady=6, font="Calibri")
     button2 = tk.Button(root, text = "ISLAMIC", command=islamic, bg="gray20", fg="white", padx=6, pady=6, font="Calibri")
-    button3 = tk.Button(root, text = "OPTIONS", command=options, bg="gray20", fg="white", padx=6, pady=6, font="Calibri")
-      
+    button3 = tk.Button(root, text = "VIEW CURRENT DARES", command=view_current, bg="gray20", fg="white", padx=6, pady=6, font="Calibri")
+    button4 = tk.Button(root, text = "OPTIONS", command=options, bg="gray20", fg="white", padx=6, pady=6, font="Calibri") 
+
     # Display Buttons
-    canvas1.create_window( 180, 380, anchor = "nw", window = button1)   
-    canvas1.create_window( 295, 380, anchor = "nw", window = button2)
-    canvas1.create_window( 235, 460, anchor = "nw", window = button3)
+    canvas1.create_window( 252, 280, anchor = "nw", window = button1)   
+    canvas1.create_window( 257, 340, anchor = "nw", window = button2)
+    canvas1.create_window( 207, 400, anchor = "nw", window = button3)
+    canvas1.create_window( 252, 460, anchor = "nw", window = button4)
     
     root.mainloop()
     
@@ -88,44 +101,75 @@ def islamic():
     choose('1', screen1)
     
 def choose(ri, screen1):
-    dares = get_dares()
-    check_reset(dares, ri)
+    done, done_rec = is_done(k=ri)
+    if not done==1:
+        dares = get_dares()
+        check_reset(dares, ri)
+        
+        prior_dares = []
+        c = 0
+        for d in dares:
+            if d[1]==ri:
+                c+=1
+                prior_dares.extend([(d[0])]*int(d[4]))
+        
+        if c>0 and len(prior_dares) > 0:
+                num = random.choice(prior_dares)
+                dare = remove_dare(id_=num,comm='selected')[1]
+                name = dare[2]
+                dare[4] = int(dare[4]) - 2
+                if dare[4]<0:
+                    dare[4] = 0
+                add_dare(*dare,comm="selected")
+                
+                ll(screen1, "")
+                ll(screen1, "YOUR DARE:", height=4, fg="black")
+                ll(screen1, name.upper(), fontsize=20)
+                ll(screen1, "")
+                ll(screen1, text=f"Time left to complete: {time_left(dare)}")
+                
+        else:
+            ll(screen1, "No dares available!", height=4, fg="black")
     
-    prior_dares = []
-    c = 0
-    for d in dares:
-        if d[1]==ri:
-            c+=1
-            prior_dares.extend([(d[0])]*int(d[4]))
-    
-    if c>0 and len(prior_dares) > 0:
-            num = random.choice(prior_dares)
-            dare = remove_dare(id_=num,comm='selected')[1]
-            name = dare[2]
-            dare[4] = int(dare[4]) - 2
-            if dare[4]<0:
-                dare[4] = 0
-            add_dare(*dare,comm="selected")
-            
-            ll(screen1, "YOUR DARE:", height=4, fg="black")
-            ll(screen1, name.upper(), fontsize=20)
-            
     else:
-        ll(screen1, "No dares available!", height=4, fg="black")
+        ll(screen1, "", height=5)
+        ll(screen1, "Please complete current dare first!", fg="black")
+        ll(screen1, f"Current dare: {done_rec[4]}", fg="black")
+        ll(screen1, "", height=4)
+        
+        ll(screen1, text=f"Time left to complete: {time_left(get_dare(done_rec[2]))}")
         
 def check_reset(dares, ri):
     
-    f=open('files/log2.dat','rb')
+    try:
+        f=open('files/log.dat','rb')
+    except FileNotFoundError: # If no log file:
+        add_log(comm='start') # Create log file and add an empty reset record
+        last_reset = dt.now()
+        f=open('files/log.dat','rb')
+
+    # Note: For the first reset record, the time at which the user clicks for a random dare is set as first reset aka 'start'
+    # After that, the next reset will be done after specified number of days (eg: a week)
+    start=0 
     try:
         while True:
             rec = pickle.load(f)
-            if rec[0] == 'reset':
+            if rec[0]=='start':
+                start=1
+                last = rec
+            if rec[0] == 'reset' and rec[3]==ri:
                 last = rec
     except EOFError:
         f.close()
+    
+    if not start:
+        add_log(comm='start')
+        last_reset=dt.now()
         
-    last_reset = dt.strptime(last[1],"%Y-%m-%d %H:%M:%S.%f") # time of last reset
     now = dt.now() # time now
+    if start:
+        last_reset = dt.strptime(last[1],"%Y-%m-%d %H:%M:%S.%f") # time of last reset
+    
     if now > last_reset + td(weeks=1): # if a week has passed since last reset
         reset_p(ri=ri, dares=dares)
         
@@ -139,7 +183,68 @@ def reset_p(ri, dares, msg=0, screen1=None):
     
     if msg:
         ll(screen1, "Saved!")
+    
+''' 
+if random button does both view current dare and select new dare: 
+a new dare cannot be chosen until the old one is completed
+random button will have to check if a dare has already been selected
+and only if not should it show a new dare
+this too can go two ways: 1) new dare ONLY on completion 2) refresh on a new day
 
+if another button for viewing current dare, possibly allowing more than one dare at a time
+in which case, we have to enter which dare we have completed or use radiobuttons
+if only one dare at a time: random button should be disabled or show a go back message
+'''
+    
+def time_left(dare):
+    left = str(dt.combine((dt.today() + td(days=1)),time(00,00)) - dt.now())
+    print(left)
+    hm = left[:5].split(':')
+    left_time = f"{int(hm[0])} hours, {int(hm[1])} minutes"
+    print(hm)
+    return left_time
+
+def view_current():
+    screen1 = screen("View Current Dares")
+    
+    for ri in ["0Random","1Islamic"]:
+        ll(screen1, f"{ri[1:]}:", fg="black", height=2)
+        
+        k = ri[0]
+        done, done_rec = is_done(k)
+        
+        if done == 1: # 'selected' record exists but not 'done' record (today)
+            ll(screen1, done_rec[4])
+            s,d = screen1, done_rec
+            lb(screen1, "Mark as done", lambda s=s, d=d: mark_done(s,d))
+        else:
+            ll(screen1, "No dare chosen!")
+
+def is_done(k):
+    f=open('files/log.dat','rb')
+    try:
+        id_ = done = 0
+        done_rec = []
+        while True:
+            rec = pickle.load(f)
+            rec_time = dt.strptime(rec[1],"%Y-%m-%d %H:%M:%S.%f")
+            today = dt.combine(date.today(),time(00,00)) # today at 00:00
+            if rec[0]=='selected' and rec_time > today and str(rec[3])==k:
+                id_ = rec[2]
+                done_rec = rec
+                done = 1
+            if rec[2] == id_ and rec[0] == 'done' and rec_time > today:
+                done = 2 
+    except EOFError:
+        f.close()
+    
+    return done, done_rec
+            
+def mark_done(screen1, rec):
+    add_log(comm="done",id_=rec[2],k=rec[3],n=rec[4])
+    cong = random.choice(['Good work!','Keep it up!', "Awesome!", "Way to go, buddy!", "COOL!", "WOOHOO!"])
+    ll(screen1, cong)
+        
 def options():
     screen1 = screen("Options")
 #    root.withdraw()
@@ -151,13 +256,14 @@ def options():
     lb(screen1, "Remove Dare", remove)
     lb(screen1, "Reset Priorities", reset)
 #    lb(screen1, "BACK", lambda: [root.deiconify(), screen1.destroy()])
+    # maybe use a single window and clear all widgets instead of destroying/hiding windows
     
     return screen1
 
 def view():
     final = screen_height(10)
     screen1 = screen("View Dares", final)
-    display(screen1)
+    display(screen1=screen1,view=1)
     
 def change(dorc):
     final = screen_height(3)
@@ -253,9 +359,24 @@ def lb(screen1, btext, command, lheight=1):
     tk.Label(screen1, text="", bg="DarkSlateGray3", height=lheight).pack()
     tk.Button(screen1,text=btext,command=command, bg="white smoke").pack()
 
-def display(screen1):
+def display(screen1,view=0):
     dares_table(screen1,"Random",'0')
+    if view: ll(screen1, f"Total done: {done_dares('0')}")
     dares_table(screen1,"Islamic",'1')
+    if view: ll(screen1, f"Total done: {done_dares('1')}")
+    
+def done_dares(k):
+    fh = open('files/log.dat','rb')
+    try:
+        c=0
+        while True:
+            rec = pickle.load(fh)
+            if rec[3]==k and rec[0]=='done':
+                c+=1
+    except:
+        fh.close()
+    
+    return c
     
 def dares_table(screen1, kind, ri):
     dares = get_dares()
@@ -273,15 +394,20 @@ def dares_table(screen1, kind, ri):
         ll(screen1,"No dares available!")
 
 def get_dares():
-    fh = open('Files/darestry.csv','r')
+    fh = open('Files/dares.csv','r')
     read = csv.reader(fh)
     dares = list(read)
     fh.close()
     
     return dares
 
+def get_dare(id_):
+    for dare in get_dares():
+        if int(dare[0])==id_:
+            return dare
+
 def add_dare(id_=0,k='0',n='',dp=0,cp=0,comm=''):
-    fh = open('Files/darestry.csv','a', newline='')
+    fh = open('Files/dares.csv','a', newline='')
     adder = csv.writer(fh)
     
     text = "Saved!"
@@ -306,7 +432,7 @@ def add_dare(id_=0,k='0',n='',dp=0,cp=0,comm=''):
     print(text)
     fh.close()
     
-    add_log(comm=comm, id_=id_, n=n)
+    add_log(comm=comm, id_=id_, k=k, n=n)
     
     return text
 
@@ -319,7 +445,7 @@ def remove_dare(id_,p=0,comm=''):
     
     dares = get_dares()
     
-    fh = open('Files/darestry.csv','w', newline='')
+    fh = open('Files/dares.csv','w', newline='')
     add_dares = csv.writer(fh)
     
     c=0
@@ -345,10 +471,10 @@ def screen_height(limit):
     
     return final
 
-def add_log(comm, id_, n):
-    f = open('files/log2.dat','ab')
+def add_log(comm, id_=0, k='', n=''):
+    f = open('files/log.dat','ab')
     timestamp = str(dt.now())
-    log = [comm,timestamp,id_,n]
+    log = [comm,timestamp,id_,k,n]
     pickle.dump(log,f)
     f.close()
 
