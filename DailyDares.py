@@ -1,33 +1,13 @@
 import tkinter as tk
 import csv
 import random
-
-# run once for crispy clarity
-# =============================================================================
-# import ctypes
-# import sys
-# 
-# if __name__ == "__main__":   
-#     if 'win' in sys.platform:
-#         ctypes.windll.shcore.SetProcessDpiAwareness(1)
-# =============================================================================
-
-'''
-To do:
-    - Fonts, button colors, background images
-    - convert final to exe (auto-py-to-exe)
-    --- serial number for easy deletion/changing
-    - back button; change window instead of new windows
-    --- buttons instead of typing for random and islamic options
-    --- priorities 1,3,5 and -2 every usage
-    --- condense code
-    --- decrease priority
-'''
+import pickle
+from datetime import timedelta as td
+from datetime import datetime as dt
+from datetime import time, date
 
 root=tk.Tk()
 def main_root():
-
-    
     root.geometry("600x600")
     root.title('Daily Dares')
     root.iconbitmap(r'Files/icon.ico')
@@ -45,12 +25,14 @@ def main_root():
     # Create Buttons
     button1 = tk.Button(root, text = "RANDOM", command=random_dare, bg="gray20", fg="white", padx=6, pady=6, font="Calibri")
     button2 = tk.Button(root, text = "ISLAMIC", command=islamic, bg="gray20", fg="white", padx=6, pady=6, font="Calibri")
-    button3 = tk.Button(root, text = "OPTIONS", command=options, bg="gray20", fg="white", padx=6, pady=6, font="Calibri")
-      
+    button3 = tk.Button(root, text = "VIEW CURRENT DARES", command=view_current, bg="gray20", fg="white", padx=6, pady=6, font="Calibri")
+    button4 = tk.Button(root, text = "OPTIONS", command=options, bg="gray20", fg="white", padx=6, pady=6, font="Calibri") 
+
     # Display Buttons
-    canvas1.create_window( 180, 380, anchor = "nw", window = button1)   
-    canvas1.create_window( 295, 380, anchor = "nw", window = button2)
-    canvas1.create_window( 235, 460, anchor = "nw", window = button3)
+    canvas1.create_window( 252, 280, anchor = "nw", window = button1)   
+    canvas1.create_window( 257, 340, anchor = "nw", window = button2)
+    canvas1.create_window( 207, 400, anchor = "nw", window = button3)
+    canvas1.create_window( 252, 460, anchor = "nw", window = button4)
     
     root.mainloop()
     
@@ -63,93 +45,181 @@ def islamic():
     choose('1', screen1)
     
 def choose(ri, screen1):
-    dares = get_dares()
-    check_reset(dares, ri)
+    done, done_rec = is_done(k=ri)
+    if not done==1:
+        dares = get_dares()
+        check_reset(dares, ri)
+        
+        prior_dares = []
+        c = 0
+        for d in dares:
+            if d[1]==ri:
+                c+=1
+                prior_dares.extend([(d[0])]*int(d[4]))
+        
+        if c>0 and len(prior_dares) > 0:
+                num = random.choice(prior_dares)
+                dare = remove_dare(id_=num,comm='selected')[1]
+                name = dare[2]
+                dare[4] = int(dare[4]) - 2
+                if dare[4]<0:
+                    dare[4] = 0
+                add_dare(*dare,comm="selected")
+                
+                ll(screen1, "")
+                ll(screen1, "YOUR DARE:", height=4, fg="black")
+                ll(screen1, name.upper(), fontsize=20)
+                ll(screen1, "")
+                ll(screen1, text=f"Time left to complete: {time_left(dare)}")
+                
+        else:
+            ll(screen1, "No dares available!", height=4, fg="black")
     
-    prior_dares = []
-    c = 0
-    for d in dares:
-        if d[0]==ri:
-            c+=1
-            prior_dares.extend([(d[3])]*int(d[2]))
-    
-    if c>0 and len(prior_dares) > 0:
-            num = random.choice(prior_dares)
-            dare = remove_dare(num)[1]
-            name = dare[1]
-            dare[2] = int(dare[2]) - 2
-            if dare[2]<0:
-                dare[2] = 0
-            add_dare(*dare[:3])
-            
-            ll(screen1, "YOUR DARE:", height=4, fg="black")
-            ll(screen1, name.upper(), fontsize=20)
-            
     else:
-        ll(screen1, "No dares available!", height=4, fg="black")
+        ll(screen1, "", height=5)
+        ll(screen1, "Please complete current dare first!", fg="black")
+        ll(screen1, f"Current dare: {done_rec[4]}", fg="black")
+        ll(screen1, "", height=4)
+        
+        ll(screen1, text=f"Time left to complete: {time_left(get_dare(done_rec[2]))}")
         
 def check_reset(dares, ri):
-    sum_ri,total_p = 0,0
-    for i in dares:
-        if i[0]==ri: # NUM -> 0 = RANDOM, 1 = ISLAMIC
-            sum_ri += 1 # TOTAL NUMBER OF ALL ISLAMIC OR RANDOM DARES
-            total_p += int(i[2]) # TOTAL PRIORITY OF ALL ISLAMIC OR RANDOM DARES
-          
-    max_p = 5
-    max_total_p = sum_ri * max_p
-    max_minus = 14 # AFTER 7 PRIORITY POINTS OF RANDOM OR ISLAMIC ARE REDUCED, RESET THOSE BACK TO 5
-    if total_p <= (max_total_p - max_minus):
-        reset_p(ri, dares)
+    
+    try:
+        f=open('files/log.dat','rb')
+    except FileNotFoundError: # If no log file:
+        add_log(comm='start') # Create log file and add an empty reset record
+        last_reset = dt.now()
+        f=open('files/log.dat','rb')
+
+    # Note: For the first reset record, the time at which the user clicks for a random dare is set as first reset aka 'start'
+    # After that, the next reset will be done after specified number of days (eg: a week)
+    start=0 
+    try:
+        while True:
+            rec = pickle.load(f)
+            if rec[0]=='start':
+                start=1
+                last = rec
+            if rec[0] == 'reset' and rec[3]==ri:
+                last = rec
+    except EOFError:
+        f.close()
+    
+    if not start:
+        add_log(comm='start')
+        last_reset=dt.now()
+        
+    now = dt.now() # time now
+    if start:
+        last_reset = dt.strptime(last[1],"%Y-%m-%d %H:%M:%S.%f") # time of last reset
+    
+    if now > last_reset + td(weeks=1): # if a week has passed since last reset
+        reset_p(ri=ri, dares=dares)
         
 def reset_p(ri, dares, msg=0, screen1=None):
-    for d in dares:
-        if d[0]==ri:
-            name = d[1]
-            num = d[3]
-            remove_dare(num)
-            add_dare(ri,name,5,num)
+    for dare in dares:
+        if dare[1]==ri:
+            id_ = dare[0]
+            remove_dare(id_=id_,comm='reset')
+            dare[4] = dare[3] # Resetting current priority to default priority
+            add_dare(*dare,comm="reset")
     
     if msg:
         ll(screen1, "Saved!")
+    
+def time_left(dare):
+    left = str(dt.combine((dt.today() + td(days=1)),time(00,00)) - dt.now())
+    print(left)
+    hm = left[:5].split(':')
+    left_time = f"{int(hm[0])} hours, {int(hm[1])} minutes"
+    print(hm)
+    return left_time
 
+def view_current():
+    screen1 = screen("View Current Dares")
+    
+    for ri in ["0Random","1Islamic"]:
+        ll(screen1, f"{ri[1:]}:", fg="black", height=2)
+        
+        k = ri[0]
+        done, done_rec = is_done(k)
+        
+        if done == 1: # 'selected' record exists but not 'done' record (today)
+            ll(screen1, done_rec[4])
+            s,d = screen1, done_rec
+            lb(screen1, "Mark as done", lambda s=s, d=d: mark_done(s,d))
+        else:
+            ll(screen1, "No dare chosen!")
+
+def is_done(k):
+    f=open('files/log.dat','rb')
+    try:
+        id_ = done = 0
+        done_rec = []
+        while True:
+            rec = pickle.load(f)
+            rec_time = dt.strptime(rec[1],"%Y-%m-%d %H:%M:%S.%f")
+            today = dt.combine(date.today(),time(00,00)) # today at 00:00
+            if rec[0]=='selected' and rec_time > today and str(rec[3])==k:
+                id_ = rec[2]
+                done_rec = rec
+                done = 1
+            if rec[2] == id_ and rec[0] == 'done' and rec_time > today:
+                done = 2 
+    except EOFError:
+        f.close()
+    
+    return done, done_rec
+            
+def mark_done(screen1, rec):
+    add_log(comm="done",id_=rec[2],k=rec[3],n=rec[4])
+    cong = random.choice(['Good work!','Keep it up!', "Awesome!", "Way to go, buddy!", "COOL!", "WOOHOO!"])
+    ll(screen1, cong)
+        
 def options():
     screen1 = screen("Options")
-#    root.withdraw()
-    
+
     lb(screen1, "View Dares", view, 3)
-    lb(screen1, "Change priority", change)
+    lb(screen1, "Change Current Priority", lambda: change("current"))
+    lb(screen1, "Change Default Priority", lambda: change("default"))
     lb(screen1, "Add Dare", add)
     lb(screen1, "Remove Dare", remove)
-    lb(screen1, "Reset priorities", reset)
-#    lb(screen1, "BACK", lambda: [root.deiconify(), screen1.destroy()])
-    
+    lb(screen1, "Reset Priorities", reset)
     return screen1
 
 def view():
     final = screen_height(10)
     screen1 = screen("View Dares", final)
-    display(screen1)
+    display(screen1=screen1,view=1)
     
-def change():
+def change(dorc):
     final = screen_height(3)
-    screen1 = screen("Change priority", final)
+    screen1 = screen(f"Change {dorc} priority", final)
     display(screen1)
-    num = tk.StringVar()
+    id_ = tk.StringVar()
     priority = tk.StringVar()
     
-    lle(screen1,"Enter dare No.:",num)
-    lle(screen1,"Enter new priority:",priority)
-    lb(screen1, "Save", lambda: change_p(screen1, num.get(), priority.get()))
+    lle(screen1, "Enter dare ID:",id_)
+    lle(screen1, f"Enter new {dorc} priority:",priority)
+    lb(screen1, "Save", lambda: change_p(screen1, id_.get(), priority.get(), dorc))
     
-def change_p(screen1, num, p):
-    c, dare = remove_dare(num,p)
+def change_p(screen1, num, p, dorc):
+    
+    if dorc == "default":
+        dorcnum = 3
+    elif dorc == "current":
+        dorcnum = 4
+    
+    comm="c_"+dorc
+    c, dare = remove_dare(id_=num,p=p,comm=comm)
     
     text = "Saved!"
     if c==0:
         text = dare
     else:
-        dare[2] = p
-        text = add_dare(*dare)
+        dare[dorcnum] = p
+        text = add_dare(*dare,comm=comm)
     ll(screen1, text)
 
 def add():
@@ -158,41 +228,43 @@ def add():
     name = tk.StringVar()
     kind = tk.StringVar()
     kind.set(value='0') #temporary
-    priority = tk.StringVar()
+    default = tk.StringVar()
     
     lle(screen1,"Dare:",name)
     ll(screen1,"Dare Type:",fg="white")
     tk.Radiobutton(screen1, text="Random", variable=kind, value='0').pack(pady=(5,10))
     tk.Radiobutton(screen1, text="Islamic", variable=kind, value='1').pack()
-    lle(screen1,"Priority:",priority)
-    lb(screen1, "Save", lambda: save(screen1, kind.get().strip(), name.get().strip(), priority.get().strip()))
+    lle(screen1, "Default Priority:", default)
+    lb(screen1, "Save", lambda: save(screen1=screen1, k=kind.get().strip(), n=name.get().strip(), dp=default.get().strip() ))
     
-def save(screen1, k,n,p):
-    text = add_dare(k,n,p)
+def save(screen1, k,n,dp):
+    cp = dp
+    text = add_dare(k=k,n=n,dp=dp,cp=cp,comm='add')
     ll(screen1, text)
     
 def remove():
     final = screen_height(7)
     screen1 = screen("Remove Dare", final)
     display(screen1)
-    num = tk.StringVar()
+    id_ = tk.StringVar()
     
-    lle(screen1,"Enter dare No.:",num)
-    lb(screen1, "Remove", lambda: delete(screen1, num.get()))
+    lle(screen1,"Enter dare ID:",id_)
+    lb(screen1, "Remove", lambda: delete(screen1, id_.get()))
     
-def delete(screen1, num):
-    c = remove_dare(num)[0]
+def delete(screen1, id_):
+    c = remove_dare(id_,comm='remove')[0]
             
     text="Removed!"
     if c==0:
-        text = f"Dare no. '{num}' not found!"
+        text = f"Dare ID '{id_}' not found!"
     
     ll(screen1, text)
     
 def reset():
     screen1 = screen("Reset priorities")
-    lb(screen1, "Random", lambda: reset_p('0', get_dares(), 1, screen1), lheight=4)
-    lb(screen1, "Islamic", lambda: reset_p('1', get_dares(), 1, screen1))
+    lb(screen1, "Random", lambda: reset_p(ri='0', dares=get_dares(), msg=1, screen1=screen1), lheight=4)
+    lb(screen1, "Islamic", lambda: reset_p(ri='1', dares=get_dares(), msg=1, screen1=screen1))
+    
     
 def screen(title, final=380):
     screen1=tk.Toplevel(root)
@@ -215,85 +287,105 @@ def lb(screen1, btext, command, lheight=1):
     tk.Label(screen1, text="", bg="DarkSlateGray3", height=lheight).pack()
     tk.Button(screen1,text=btext,command=command, bg="white smoke").pack()
 
-def display(screen1):
+def display(screen1,view=0):
     dares_table(screen1,"Random",'0')
+    if view: tk.Label(screen1, text=f"Total done: {done_dares('0')}", fg="green", bg="DarkSlateGray3", font=("calibri",11)).pack()
     dares_table(screen1,"Islamic",'1')
+    if view: tk.Label(screen1, text=f"Total done: {done_dares('1')}", fg="green", bg="DarkSlateGray3", font=("calibri",11)).pack()
     
-def dares_table(screen1, kind, num):
+def done_dares(k):
+    fh = open('files/log.dat','rb')
+    try:
+        c=0
+        while True:
+            rec = pickle.load(fh)
+            if rec[3]==k and rec[0]=='done':
+                c+=1
+    except:
+        fh.close()
+    
+    return c
+    
+def dares_table(screen1, kind, ri):
     dares = get_dares()
     ll(screen1,f"{kind.upper()}:", fg="black")
-    tk.Label(screen1, text="No.\tDare\t\t\t\t\tPriority", bg="pink").pack(fill='both', padx=10)
-    for i in dares:
-            if i[0]==num:
+    if len(dares):
+        tk.Label(screen1, text="ID\tDare\t\t\t\tDefault\tCurrent", bg="pink").pack(fill='both', padx=10)
+        for i in dares:
+            if i[1]==ri:
                 space=0
-                if ' ' in i[1]:
+                if ' ' in i[2]:
                     space = 1
-                tab = "\t"*(5-((len(i[1])-space)//8))
-                tk.Label(screen1, text=i[3]+'\t'+i[1]+tab+'     '+i[2], bg="DarkSlateGray3", anchor='w').pack(fill='both', padx=(35,0))
-
+                tab = "\t"*(4-((len(i[2])-space)//8))
+                tk.Label(screen1, text=i[0]+'\t'+i[2]+tab+'     '+i[3]+'\t    '+i[4], bg="DarkSlateGray3", anchor='w').pack(fill='both', padx=(35,0))
+    else:
+        ll(screen1,"No dares available!")
 
 def get_dares():
-    fh=open('Files/Dares.csv','r')
-    dares=list(csv.reader(fh))
+    fh = open('Files/dares.csv','r')
+    read = csv.reader(fh)
+    dares = list(read)
     fh.close()
     
     return dares
 
-def add_dare(k,n,p,num=0):
-    fh = open('Files/Dares.csv','a', newline='')
-    add_dare = csv.writer(fh)
+def get_dare(id_):
+    for dare in get_dares():
+        if int(dare[0])==id_:
+            return dare
+
+def add_dare(id_=0,k='0',n='',dp=0,cp=0,comm=''):
+    fh = open('Files/dares.csv','a', newline='')
+    adder = csv.writer(fh)
     
     text = "Saved!"
     status = 1
-    
-    if k not in ['0','1']:
-        if k.lower() == 'random':
-            k=0
-        elif k.lower() == 'islamic':
-            k=1
-        else:
-            text=f"'{k}' is not a valid entry for dare type"
-            status = 0
         
-    if str(p).isdigit() != True:
-        text = f"'{p}' is not a valid priority"
+    if str(cp).isdigit() != True:
+        text = f"'{cp}' is not a valid priority"
         status = 0
         
     if status:
-        num=int(num)
-        if num==0:
+        id_=int(id_)
+        if id_==0:
             dares = get_dares()
             maxi=0
-            for i in dares:
-                if int(i[3])>maxi:
-                    maxi=int(i[3])
-            num=maxi+1
-        add_dare.writerow([k,n,p,num])
+            if len(dares):
+                for i in dares:
+                    if int(i[0])>maxi:
+                        maxi=int(i[0])
+            id_=maxi+1
+        adder.writerow([id_,k,n,dp,cp])
         
     print(text)
     fh.close()
+    
+    add_log(comm=comm, id_=id_, k=k, n=n)
+    
     return text
 
-def remove_dare(num,p=0):
-    dare = f"Dare No. '{num}' not found!"
-    if not str(num).isdigit():
+def remove_dare(id_,p=0,comm=''):
+    dare = f"Dare ID '{id_}' not found!"
+    if not str(id_).isdigit():
         return 0,dare
     if not str(p).isdigit():
         return 0,f"'{p}' is not a valid priority!"
     
     dares = get_dares()
     
-    fh = open('Files/Dares.csv','w', newline='')
+    fh = open('Files/dares.csv','w', newline='')
     add_dares = csv.writer(fh)
     
     c=0
     for i in dares:
-        if int(i[3])!=int(num):
+        if int(i[0])!=int(id_):
             add_dares.writerow(i)
         else:
             c=c+1
             dare = i
     fh.close()
+    
+    add_log(comm=comm, id_=id_, n=dare[2])
     
     return c,dare
 
@@ -306,5 +398,12 @@ def screen_height(limit):
         final = 380 + extra
     
     return final
+
+def add_log(comm, id_=0, k='', n=''):
+    f = open('files/log.dat','ab')
+    timestamp = str(dt.now())
+    log = [comm,timestamp,id_,k,n]
+    pickle.dump(log,f)
+    f.close()
 
 main_root()
